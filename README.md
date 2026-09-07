@@ -3,9 +3,15 @@
 **Track:** Prediction Markets & Real-World Settlement — Agent Tank hackathon
 (`https://portal.genlayer.foundation/agent-tank/hackathon`)
 
-**Live:** <https://anybet-i6xq.onrender.com/index.html>
 **Contract:** [`0xBF326FA29B839cF95d3c9d0895b7A852031C3822`](https://explorer-studio.genlayer.com/address/0xBF326FA29B839cF95d3c9d0895b7A852031C3822)
-on GenLayer StudioNet, chain 61999
+on GenLayer StudioNet, chain 61999 — every policy ever written, and the
+reasoning the validators agreed on, is readable there without trusting this
+repository at all.
+
+The site is `frontend/`, served as static files: `render.yaml` is a Render
+blueprint and `.github/workflows/pages.yml` publishes to GitHub Pages. No URL
+is hard-coded here, because a link in a README outlives the deployment it
+points at.
 
 Parametric insurance, settled by validator consensus. Name the event you want
 cover against, say how it should be judged and where the evidence lives. At
