@@ -111,16 +111,29 @@ function sortForDisplay(list) {
   return [...list].sort((a, b) => rank(a) - rank(b) || Number(b.id) - Number(a.id));
 }
 
-function policyState(p) {
+/** `mine` changes the wording, not the facts.
+ *
+ *  "premium earned" is true, and it is the pool's sentence. Shown on your own
+ *  policy it reads as though you earned something, when what actually happened
+ *  is that the event did not occur and the cover paid nothing - which is the
+ *  ordinary outcome of insurance and has to be said in those words. */
+function policyState(p, mine = false) {
   const now = Math.floor(Date.now() / 1000);
   if (p.status === 'ACTIVE') {
     const left = Number(p.expires_ts) - now;
     if (left > 0) return { key: 'live', label: `cover ends in ${countdown(left)}` };
     return { key: 'due', label: 'expired - awaiting adjudication' };
   }
-  if (p.settlement === 'PAID') return { key: 'paid', label: 'fired - paid out' };
-  if (p.settlement === 'REFUNDED') return { key: 'refunded', label: 'unknowable - premium refunded' };
-  return { key: 'expired', label: 'did not fire - premium earned' };
+  if (p.settlement === 'PAID') {
+    return { key: 'paid', label: mine ? 'fired - paid to you' : 'fired - paid out' };
+  }
+  if (p.settlement === 'REFUNDED') {
+    return { key: 'refunded', label: 'unknowable - premium refunded' };
+  }
+  return {
+    key: 'expired',
+    label: mine ? 'did not happen - this paid nothing' : 'did not fire - premium earned',
+  };
 }
 
 function countdown(seconds) {
@@ -137,10 +150,10 @@ function countdown(seconds) {
 }
 
 function policyCard(p) {
-  const state = policyState(p);
+  const isMine = signer.address && p.holder === signer.address.toLowerCase();
+  const state = policyState(p, isMine);
   const payout = BigInt(p.payout || 0);
   const premium = BigInt(p.premium || 0);
-  const isMine = signer.address && p.holder === signer.address.toLowerCase();
 
   const card = document.createElement('article');
   card.className = `policy ${state.key}`;
@@ -265,8 +278,12 @@ function renderQuote() {
         <span class="q-note">(${Number(rate) / 100}% of the sum insured)</span></span>
     </div>
     <div class="quote-row">
-      <span class="q-label">If it fires you receive</span>
+      <span class="q-label">If it happens you receive</span>
       <span class="q-value">${gen(payout)} GEN</span>
+    </div>
+    <div class="quote-row">
+      <span class="q-label">If it does not happen</span>
+      <span class="q-value">nothing - the pool keeps your ${gen(premium)} GEN</span>
     </div>
     <div class="quote-row">
       <span class="q-label">If it cannot be judged</span>
@@ -320,6 +337,47 @@ async function refreshAccount() {
 
 // --- actions ---------------------------------------------------------
 
+/** Wait for money the contract sent to actually land, and say so only then.
+ *
+ *  `emit_transfer` does not move GEN inside the call that asks for it. The
+ *  contract emits a transfer, and that becomes a *second* transaction which
+ *  reaches consensus about a minute later. So the write returning means the
+ *  contract agreed to pay, not that you have been paid - and this page used to
+ *  say "Paid out to your wallet" at that moment, which was a straight lie:
+ *  the user checked, saw nothing, and reasonably concluded it was broken.
+ *
+ *  Polls the wallet's own balance rather than trusting a timer, and gives up
+ *  saying so honestly instead of pretending. */
+/** Read fresh rather than trusting the cached figure: the comparison below is
+ *  only meaningful against the balance as it stood the moment before we asked
+ *  to be paid. */
+async function walletBalanceNow() {
+  try {
+    return BigInt(await rpc('eth_getBalance', [signer.address, 'latest']));
+  } catch {
+    return walletGen;
+  }
+}
+
+async function awaitPayout(before, label) {
+  toast(`${label} - the contract is sending the GEN now, this takes about another minute`, 'info');
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 6000));
+    let now;
+    try {
+      now = BigInt(await rpc('eth_getBalance', [signer.address, 'latest']));
+    } catch { continue; }
+    if (now > before) {
+      walletGen = now;
+      renderSteps();
+      toast(`${gen(now - before)} GEN has arrived in your wallet`, 'success');
+      return true;
+    }
+  }
+  toast('The transfer has not shown up yet. It is on its way - check your wallet in a minute.', 'info');
+  return false;
+}
+
 function requireSignIn(what) {
   if (isSignedIn()) return true;
   toast(`Connect a wallet to ${what}`, 'info');
@@ -353,10 +411,13 @@ async function settle(policy) {
     await contract.write('settle_policy', [Number(policy.id)]);
     await reloadAll({ force: true });
     const fresh = policies.find((p) => p.id === policy.id);
+    // Said from the policyholder's side, because that is who is reading it.
+    // "The pool keeps the premium" is the same fact, but it answers a question
+    // they did not ask and leaves theirs - do I get anything? - unanswered.
     const said = {
-      PAID: 'Trigger fired - the sum insured is yours to collect',
-      REFUNDED: 'Could not be judged - your premium has been refunded',
-      EXPIRED: 'Trigger did not fire - the pool keeps the premium',
+      PAID: 'The event happened - the sum insured is yours, click Collect to take it',
+      REFUNDED: 'Could not be judged - your premium is refunded, click Collect to take it',
+      EXPIRED: 'The event did not happen, so this cover pays nothing. The premium stays with the pool.',
     }[fresh?.settlement];
     toast(said || 'Settled', fresh?.settlement === 'EXPIRED' ? 'info' : 'success');
   });
@@ -365,8 +426,10 @@ async function settle(policy) {
 async function collect() {
   if (!requireSignIn('collect')) return;
   await withBusy('Collecting', async () => {
+    const before = await walletBalanceNow();
     await contract.write('withdraw_all', []);
-    toast('Paid out to your wallet', 'success');
+    await refreshAccount();
+    await awaitPayout(before, 'Collected');
     await refreshAccount();
   });
 }
@@ -388,9 +451,11 @@ async function withdrawPool() {
   const amount = prompt(`Only unreserved capital can leave. ${free} GEN is free.`, free);
   if (!amount) return;
   await withBusy('Withdrawing', async () => {
+    const before = await walletBalanceNow();
     await contract.write('withdraw_pool', [toWei(amount)]);
-    toast('Withdrawn', 'success');
     await reloadAll({ force: true });
+    await awaitPayout(before, 'Withdrawn from the pool');
+    await refreshAccount();
   });
 }
 
