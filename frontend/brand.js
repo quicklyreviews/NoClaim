@@ -24,7 +24,7 @@ const MARK_PATHS = `
  *
  *  Decorative rather than labelled: it always sits next to the wordmark, so a
  *  screen reader announcing the name twice is noise - and it carried the wrong
- *  name on the cover desk for as long as the label was hard-coded. */
+ *  name on one page for as long as the label was hard-coded. */
 export function markSvg(size = 30) {
   return `<svg class="mark" width="${size}" height="${size}" viewBox="0 0 100 100"
     aria-hidden="true" focusable="false" fill="currentColor">${MARK_PATHS}</svg>`;

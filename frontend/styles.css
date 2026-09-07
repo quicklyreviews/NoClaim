@@ -848,7 +848,7 @@ figure.exhibit blockquote {
 .book-row .outcome { color: var(--muted); text-align: right; }
 .book-empty { margin: 0; padding: 12px 13px; color: var(--muted); font-size: 13px; background: var(--ground); }
 
-/* ================= NoClaim ================= */
+/* ================= the cover desk ================= */
 
 .underwriter-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-bottom: 14px; }
 
@@ -972,7 +972,7 @@ figure.exhibit blockquote {
 #mine-section { margin-bottom: 28px; }
 #mine-section .section-head { margin-bottom: 12px; }
 
-/* ================= NoClaim desk: rebuilt ================= */
+/* ================= cover desk: rebuilt ================= */
 
 /* --- the network bar: which chain, which contract, who is connected --- */
 
@@ -1291,7 +1291,7 @@ body.desk .hero .hero-lede {
    top of each other, and the network is the one that has to win. */
 .home-nav { position: static; }
 
-/* --- the NoClaim landing --------------------------------------------- */
+/* --- the cover landing ------------------------------------------------ */
 
 /* The left edge carries the verdict, so a glance down the list reads as a
    history of decisions rather than a list of rows. */
