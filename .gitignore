@@ -1,0 +1,23 @@
+# The demo cohort's private keys. StudioNet keys are worth nothing, but writing
+# private keys into a repository is a habit worth not forming - and anyone who
+# cloned this could then spend the balances those wallets hold in the contract.
+demo-wallets.json
+
+# Local environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# gltest writes deployment artifacts here on every run
+artifacts/
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+*.swp

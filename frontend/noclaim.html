@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NoClaim - cover that pays without a claim</title>
+<meta name="description" content="Parametric cover on GenLayer. Name the trigger, pay a premium, and validators settle it from evidence. If they cannot, your premium comes back.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="icon" id="favicon" href="data:,">
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">
+{
+  "imports": {
+    "genlayer-js": "https://esm.sh/genlayer-js@1.1.8",
+    "genlayer-js/chains": "https://esm.sh/genlayer-js@1.1.8/chains",
+    "genlayer-js/types": "https://esm.sh/genlayer-js@1.1.8/types"
+  }
+}
+</script>
+</head>
+<body class="desk">
+
+<!-- The network is not a footnote. Which chain this is talking to, which
+     contract, and whether the wallet agrees, all live above everything else. -->
+<div class="netbar" id="netbar">
+  <div class="wrap netbar-inner">
+    <span class="net-state" id="net-state">
+      <span class="dot" id="net-dot"></span>
+      <strong id="net-name">GenLayer StudioNet</strong>
+      <span class="net-id" id="net-id">chain 61999</span>
+    </span>
+    <a class="net-contract" id="net-contract" href="#" target="_blank" rel="noopener" title="View the contract on the explorer">
+      <span class="label">contract</span>
+      <code id="contract-address">-</code>
+    </a>
+    <div class="netbar-right">
+      <button id="btn-switch-chain" class="warnbtn" hidden>Switch to StudioNet</button>
+      <span class="net-account" id="net-account" hidden>
+        <code id="wallet-address">-</code>
+        <button id="btn-signout" class="link">disconnect</button>
+      </span>
+      <button id="btn-connect" class="primary small">Connect wallet</button>
+    </div>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <a class="lockup" href="index.html" title="Back to the home page">
+      <span class="mark-slot" id="mark-slot"></span>
+      <span class="wordmark">NoClaim</span>
+    </a>
+    <h1>Cover that pays without a claim being filed.</h1>
+    <p class="hero-lede">
+      Name the thing you want cover against and where the evidence lives. At
+      expiry, independent validators read it and decide &mdash; and if they
+      cannot tell, your premium comes back rather than the argument going to
+      whoever has more lawyers.
+      <a href="index.html#build">Read the five lines that do it</a>, or clone
+      the contract and point it at your own trigger.
+    </p>
+  </div>
+</header>
+
+<!-- Where you are, right now, in three concrete steps. Ticks fill in from real
+     state rather than being a static list of instructions. -->
+<section class="wrap start" id="start">
+  <div class="start-head">
+    <h2>How to take part</h2>
+    <span class="start-progress" id="start-progress"></span>
+  </div>
+  <ol class="steps-live" id="steps-live">
+    <li id="step-connect">
+      <span class="tick"></span>
+      <div>
+        <h3>Connect an EVM wallet</h3>
+        <p>StudioNet is added for you. The page holds no keys &mdash; your wallet signs each action.</p>
+        <button class="ghost small" id="step-connect-btn">Connect</button>
+      </div>
+    </li>
+    <li id="step-gen">
+      <span class="tick"></span>
+      <div>
+        <h3>Take some test GEN</h3>
+        <p>StudioNet is a test network. The GEN is free and worth nothing.</p>
+        <button class="ghost small" id="step-gen-btn">Get 20 test GEN</button>
+      </div>
+    </li>
+    <li id="step-act">
+      <span class="tick"></span>
+      <div>
+        <h3>Buy cover, or underwrite it</h3>
+        <p>Buy protection against an event, or put capital behind the pool that pays the claims.</p>
+        <div class="step-actions">
+          <button class="ghost small" id="step-buy-btn">Buy cover</button>
+          <button class="ghost small" id="step-uw-btn">Underwrite</button>
+        </div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- The pool, in the terms that matter to each side of it. -->
+<section class="wrap pool-strip">
+  <div class="pool-card">
+    <span class="pool-label">Free to underwrite</span>
+    <span class="pool-figure" id="stat-free">-</span>
+    <span class="pool-note">the most cover this contract can still honestly sell</span>
+  </div>
+  <div class="pool-side">
+    <div><dt>Capital in the pool</dt><dd id="stat-total">-</dd></div>
+    <div><dt>Reserved against live policies</dt><dd id="stat-reserved">-</dd></div>
+    <div><dt>Premiums earned</dt><dd id="stat-earned">-</dd></div>
+    <div><dt>Paid out to date</dt><dd id="stat-paid">-</dd></div>
+  </div>
+</section>
+
+<main class="wrap">
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-tab="buy" role="tab">Buy cover</button>
+    <button class="tab" data-tab="mine" role="tab">Your cover <span class="count" id="tab-mine-count"></span></button>
+    <button class="tab" data-tab="book" role="tab">Every policy <span class="count" id="tab-book-count"></span></button>
+    <button class="tab" data-tab="underwrite" role="tab">Underwrite</button>
+  </div>
+
+  <!-- Buy -->
+  <section class="tabpanel active" id="panel-buy">
+    <div class="panel">
+      <h2>What do you want cover against?</h2>
+      <p class="lede">
+        Anything a public source can settle. Say how it should be judged and
+        where to look; every validator fetches that themselves at expiry.
+      </p>
+
+      <div class="templates">
+        <span class="eyebrow">Start from a worked example</span>
+        <div class="template-chips" id="template-chips"></div>
+        <p class="fineprint" id="template-note">
+          Each is built from live data as you click it, so the trigger sits where
+          the risk actually is rather than at a number typed last week.
+        </p>
+      </div>
+
+      <form id="buy-form">
+        <label>
+          The event
+          <input id="f-trigger" maxlength="300" required
+                 placeholder="Will Hanoi get more than 25mm of rain tomorrow?">
+        </label>
+        <label>
+          How it should be judged
+          <textarea id="f-criteria" maxlength="600" rows="3" required
+                    placeholder="Name the exact field and threshold, and say what counts as UNKNOWN."></textarea>
+        </label>
+        <label>
+          Where to look <span class="hint-inline">up to 3 URLs, comma separated</span>
+          <input id="f-sources" spellcheck="false"
+                 placeholder="https://api.open-meteo.com/v1/forecast?...">
+        </label>
+        <div class="source-tools">
+          <button type="button" id="btn-check-sources" class="ghost small">Check these sources</button>
+          <span class="warn" id="source-warning" hidden></span>
+        </div>
+        <div id="source-preview" class="source-preview" hidden></div>
+
+        <div class="row">
+          <label>
+            Sum insured <span class="hint-inline">GEN</span>
+            <input id="f-payout" type="number" step="0.1" min="0.1" value="5">
+          </label>
+          <label>
+            Premium <span class="hint-inline">GEN</span>
+            <input id="f-premium" type="number" step="0.01" min="0" value="0.1">
+          </label>
+          <label>
+            Cover runs for
+            <select id="f-window">
+              <option value="6">6 minutes</option>
+              <option value="60" selected>1 hour</option>
+              <option value="360">6 hours</option>
+              <option value="1440">1 day</option>
+              <option value="10080">1 week</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="quote" id="quote"></div>
+        <button type="submit" id="btn-buy" class="primary">Buy this cover</button>
+        <p class="fineprint" id="buy-hint"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- Your cover -->
+  <section class="tabpanel" id="panel-mine">
+    <div class="collect-banner" id="collect-panel" hidden>
+      <div>
+        <strong id="collect-line"></strong>
+        <p class="fineprint">A paid claim, a refunded premium, or both. It is credited to you until you take it.</p>
+      </div>
+      <button id="btn-collect-all" class="primary">Collect</button>
+    </div>
+    <dl class="mine-summary" id="mine-summary">
+      <div><dt>Active cover</dt><dd><span id="mine-active">-</span> <span class="unit">GEN</span></dd></div>
+      <div><dt>Premiums paid</dt><dd><span id="mine-premiums">-</span> <span class="unit">GEN</span></dd></div>
+      <div><dt>Paid out to you</dt><dd><span id="mine-paid">-</span> <span class="unit">GEN</span></dd></div>
+      <div><dt>Refunded to you</dt><dd><span id="mine-refunded">-</span> <span class="unit">GEN</span></dd></div>
+    </dl>
+    <div id="mine-policies"></div>
+  </section>
+
+  <!-- The book -->
+  <section class="tabpanel" id="panel-book">
+    <div class="section-head">
+      <h2>Every policy written</h2>
+      <button id="btn-refresh" class="link">Refresh</button>
+    </div>
+    <p class="lede">
+      The whole book is public. Anyone can settle a policy once it expires
+      &mdash; there is no adjuster to appoint and no queue to join.
+    </p>
+    <div id="policies"></div>
+  </section>
+
+  <!-- Underwrite -->
+  <section class="tabpanel" id="panel-underwrite">
+    <div class="panel">
+      <h2>Put capital behind the pool</h2>
+      <p class="lede">
+        You are taking real risk: a run of fired policies loses some of it, and
+        premiums are what you are paid for carrying that. What cannot happen is
+        capital vanishing into cover that was never backed &mdash; every policy
+        reserves its payout the moment it is written, and you can only withdraw
+        what is unreserved.
+      </p>
+      <dl class="mine-summary">
+        <div><dt>Your stake</dt><dd><span id="uw-stake">-</span> <span class="unit">GEN</span></dd></div>
+        <div><dt>Premiums earned by the pool</dt><dd><span id="uw-earned">-</span> <span class="unit">GEN</span></dd></div>
+        <div><dt>Free to withdraw</dt><dd><span id="uw-free">-</span> <span class="unit">GEN</span></dd></div>
+        <div><dt>Underwriters</dt><dd id="uw-count">-</dd></div>
+      </dl>
+      <div class="account-actions" id="uw-actions">
+        <button id="btn-fund-pool" class="primary">Add capital</button>
+        <button id="btn-withdraw-pool" class="ghost">Withdraw</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <p>
+    Intelligent Contract in GenVM on GenLayer StudioNet.
+    <a id="explorer-link" href="#" target="_blank" rel="noopener">View on the explorer</a>
+  </p>
+  <p class="fineprint">
+    Settlement is permissionless: validators fetch the sources independently, run
+    the same prompt, and the transaction only lands if their verdicts match. No
+    oracle, no adjuster, no admin key. StudioNet is a test network; the GEN on it
+    is not worth anything.
+  </p>
+</footer>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="noclaim.js"></script>
+</body>
+</html>

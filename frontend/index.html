@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NoClaim - cover that pays without a claim being filed</title>
+<meta name="description" content="Parametric insurance on GenLayer. Name the trigger and where the evidence lives; validators read it and decide. If they cannot tell, your premium comes back in full.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="icon" id="favicon" href="data:,">
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">
+{
+  "imports": {
+    "genlayer-js": "https://esm.sh/genlayer-js@1.1.8",
+    "genlayer-js/chains": "https://esm.sh/genlayer-js@1.1.8/chains",
+    "genlayer-js/types": "https://esm.sh/genlayer-js@1.1.8/types"
+  }
+}
+</script>
+</head>
+<body class="home">
+
+<!-- The same bar the desks carry. This page signs nothing, so it shows no
+     account - but it names the network and both contracts, because arriving
+     here and arriving at the app should not tell you different things about
+     where this runs. -->
+<div class="netbar" id="netbar">
+  <div class="wrap netbar-inner">
+    <span class="net-state">
+      <span class="dot"></span>
+      <strong>GenLayer StudioNet</strong>
+      <span class="net-id">chain 61999</span>
+    </span>
+    <a class="net-contract" id="net-contract-cover" href="#" target="_blank" rel="noopener" title="The NoClaim contract on the explorer">
+      <span class="label">noclaim</span>
+      <code id="cover-address">-</code>
+    </a>
+    <div class="netbar-right">
+      <a class="link" href="https://genlayer.com" target="_blank" rel="noopener">what is GenLayer?</a>
+    </div>
+  </div>
+</div>
+
+<header class="home-nav">
+  <div class="wrap home-nav-inner">
+    <a class="lockup" href="index.html">
+      <span class="mark-slot" id="mark-slot"></span>
+      <span class="wordmark">NoClaim</span>
+    </a>
+    <nav>
+      <a class="btn-link primary" href="noclaim.html">Open the cover desk</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section class="hero wrap">
+    <p class="eyebrow">Agent Tank &middot; Prediction Markets &amp; Real-World Settlement</p>
+    <h1>Cover that pays<br>without a claim being filed.</h1>
+    <p class="hero-lede">
+      Name the thing you want cover against and where the evidence lives. At
+      expiry, independent validators fetch it, read it and decide &mdash; and if
+      they cannot tell, your premium comes back rather than the argument going
+      to whoever has more lawyers.
+    </p>
+    <div class="hero-actions">
+      <a class="btn-link primary" href="noclaim.html">Open the cover desk</a>
+      <a class="btn-link ghost" href="#settles">How it settles</a>
+    </div>
+    <dl class="hero-stats" id="hero-stats">
+      <div><dt>Cover written</dt><dd id="stat-policies">&mdash;</dd></div>
+      <div><dt>Capital in the pool</dt><dd id="stat-pool">&mdash;</dd></div>
+      <div><dt>Free to underwrite</dt><dd id="stat-free">&mdash;</dd></div>
+    </dl>
+    <p class="hero-note">Live from the contract on StudioNet, not a screenshot.</p>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <h2>A market needs someone to be wrong. Insurance does not.</h2>
+      <div class="two-col">
+        <p>
+          A prediction market pays you out of the pocket of whoever took the
+          other side. That works for a question people genuinely disagree
+          about. It fails completely for the ones you actually want cover
+          against: nobody wants to be paid for betting that your warehouse
+          <em>will</em> flood.
+        </p>
+        <p>
+          So the risks worth insuring are exactly the risks a market cannot
+          price. Put an unloved question into a parimutuel pool and the honest
+          outcome is a refund &mdash; which is the same as having no cover at
+          all, arrived at more slowly.
+        </p>
+      </div>
+      <p class="pull">
+        Replace the counterparty with a pool. An underwriter is paid a premium
+        for carrying risk, not for holding an opinion, so cover can exist for
+        an event nobody wants to argue about.
+      </p>
+    </div>
+  </section>
+
+  <!-- The bigger claim, made carefully: what is built is parametric cover, and
+       what it is built out of is more general than that. -->
+  <section class="wrap">
+    <h2>The primitive underneath is not insurance</h2>
+    <p class="lede">
+      Strip the vocabulary away and this contract does one thing:
+      <strong>hold money against a described future, read the world at a stated
+      time, and move it or give it back.</strong> Insurance is the first product
+      that shape makes. It is not the only one.
+    </p>
+
+    <div class="shapes">
+      <div class="shape built">
+        <span class="shape-tag">built</span>
+        <h3>Parametric cover</h3>
+        <p>Premium in, payout reserved, trigger read at expiry. Rainfall, heat, seismic counts, a price floor.</p>
+      </div>
+      <div class="shape">
+        <span class="shape-tag">same shape</span>
+        <h3>SLA credits</h3>
+        <p>A vendor reserves a credit against its own uptime page. Nobody files a ticket; the status page is the adjudicator.</p>
+      </div>
+      <div class="shape">
+        <span class="shape-tag">same shape</span>
+        <h3>Escrow on delivery</h3>
+        <p>Funds release when a tracking endpoint says delivered, and return when the evidence never arrives.</p>
+      </div>
+      <div class="shape">
+        <span class="shape-tag">same shape</span>
+        <h3>Milestone release</h3>
+        <p>A grant tranche that unlocks when a public artefact exists &mdash; a merged PR, a published dataset, an audit report.</p>
+      </div>
+    </div>
+
+    <p class="under-verdicts">
+      Every one of those is somebody's operations team today, reading a page and
+      pressing a button, and being trusted not to press it wrongly. What makes
+      them the same problem is that the hard part was never the money &mdash; it
+      was <strong>reading evidence and exercising judgment</strong>, which is
+      exactly what a deterministic chain cannot do and what an oracle can only
+      do by being believed. Only the first card is built here. The other three
+      are the same contract with a different trigger and a different payer, and
+      that is the point.
+    </p>
+  </section>
+
+  <section class="wrap" id="settles">
+    <h2>Parametric, so there is no claim to file</h2>
+    <p class="lede">
+      A policy carries its own trigger, its own judging criteria and its own
+      sources. At expiry, every validator independently fetches those sources
+      over the real internet and runs the same prompt &mdash; and the
+      transaction only lands if their verdicts match. There is no adjuster to
+      appoint, no loss to assess, and no queue to join: anyone can settle an
+      expired policy, including someone with no stake in it.
+    </p>
+
+    <div class="verdicts">
+      <div class="verdict-card v-no">
+        <p class="name">FIRED</p>
+        <p>The evidence says the insured event happened. The full sum insured is credited to the policyholder.</p>
+      </div>
+      <div class="verdict-card v-yes">
+        <p class="name">NOT_FIRED</p>
+        <p>The evidence says it did not. The pool keeps the premium, which is what underwriters are paid for.</p>
+      </div>
+      <div class="verdict-card v-unknown">
+        <p class="name">UNKNOWN</p>
+        <p>Absent, partial or ambiguous evidence. The premium is refunded in full and the pool earns nothing at all.</p>
+      </div>
+    </div>
+
+    <p class="under-verdicts">
+      That third column is the decision the whole contract is built around.
+      Real insurance denies the claim and keeps the premium when the evidence
+      is thin, which quietly rewards writing cover on things nobody can check.
+      Here <strong>an unadjudicated risk earns the pool nothing</strong>, so the
+      incentive runs the other way: write cover on measurements a validator can
+      actually read, or be paid for it.
+    </p>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <h2>Solvency is structural, not a promise</h2>
+      <div class="two-col">
+        <p>
+          Every policy reserves its full payout out of the pool the moment it
+          is written. Cover the pool cannot back is refused at the till rather
+          than discovered at settlement &mdash; the quote tells you before you
+          pay.
+        </p>
+        <p>
+          Underwriters can only withdraw capital that is not reserved against a
+          live policy. There is no admin key, no discretionary payout, and no
+          point at which the contract can owe more than it holds.
+        </p>
+      </div>
+      <dl class="solvency" id="solvency">
+        <div><dt>Capital in the pool</dt><dd><span id="sv-total">&mdash;</span></dd></div>
+        <div><dt>Reserved against live cover</dt><dd><span id="sv-reserved">&mdash;</span></dd></div>
+        <div><dt>Free to underwrite</dt><dd><span id="sv-free">&mdash;</span></dd></div>
+        <div><dt>Premiums earned</dt><dd><span id="sv-earned">&mdash;</span></dd></div>
+      </dl>
+      <p class="fineprint" id="solvency-note">Reading the contract&hellip;</p>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="section-head">
+      <h2 id="policies-heading">The book</h2>
+      <a class="btn-link ghost" href="noclaim.html">See every policy</a>
+    </div>
+    <p class="lede">
+      Every policy ever written is public, along with the reasoning the
+      validators agreed on. Nothing here is curated.
+    </p>
+    <div id="home-policies" class="home-markets">
+      <p class="empty">Reading the contract&hellip;</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <h2>The settlement we are proudest of paid nobody</h2>
+      <p class="lede">
+        A policy was deliberately written on something the sources could not
+        possibly establish, and handed to the validators to see what they would
+        do with it. An insurer with a bad incentive keeps that premium. This one
+        gave it back.
+      </p>
+      <figure class="exhibit void">
+        <figcaption>
+          <span>Policy 2 &middot; sources: CoinGecko, Coinbase</span>
+          <span class="tag">UNKNOWN &mdash; premium refunded in full</span>
+        </figcaption>
+        <blockquote>
+          The provided evidence consists only of two Bitcoin/USD price API
+          responses from CoinGecko and Coinbase. Neither source mentions any cat
+          or whether it slept through the night, so the evidence does not settle
+          the insured event.
+        </blockquote>
+      </figure>
+      <p>
+        The validators agreed on UNKNOWN, the premium went back to the
+        policyholder, and the pool's earned premiums did not move by a single
+        wei. That is the safety argument demonstrated on-chain rather than
+        asserted in a README: when the evidence is not there, the contract
+        refuses to decide instead of quietly taking the money.
+      </p>
+    </div>
+  </section>
+
+  <!-- Devs do not want the pitch, they want the mechanism. This is the whole
+       mechanism, quoted from the deployed source rather than paraphrased. -->
+  <section class="wrap" id="build">
+    <h2>The interesting part is five lines long</h2>
+    <p class="lede">
+      An Intelligent Contract is Python running in GenVM. It can reach the open
+      internet and it can call a model &mdash; both of which are
+      non-deterministic, and neither of which a chain is allowed to simply
+      believe. The Equivalence Principle is how you get consensus out of them
+      anyway, and choosing it correctly is the entire design problem.
+    </p>
+
+    <figure class="code">
+      <figcaption>contracts/no_claim.py &mdash; the adjudication, error handling elided</figcaption>
+      <pre><code>def validator_fn(leaders_res) -&gt; bool:
+    mine   = leader_fn()                 <span class="c"># I fetch the sources myself</span>
+    theirs = leaders_res.calldata        <span class="c"># what the leader concluded</span>
+    <span class="k">return</span> mine[<span class="s">"outcome"</span>] == theirs[<span class="s">"outcome"</span>]
+
+result = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)</code></pre>
+    </figure>
+
+    <p>
+      <code>strict_eq</code> is the obvious choice and it is wrong here. It
+      demands byte-identical output, which is fine for a price feed and
+      impossible for a judgment: two honest adjudications of the same evidence
+      will word their reasoning differently while agreeing completely on the
+      verdict. So the comparison is narrowed to the one field that has to match
+      for consensus to mean anything &mdash; <code>outcome</code> &mdash; and
+      <code>reasoning</code> is left free to vary. Every validator fetches the
+      sources itself; the transaction lands only if the verdicts agree.
+    </p>
+    <p>
+      The failure mode this buys you is the right one. When the evidence is
+      thin the prompt is told to reach for <code>UNKNOWN</code>, because a wrong
+      UNKNOWN costs a premium refund and a wrong FIRED pays the wrong person out
+      of somebody else's capital.
+    </p>
+
+    <h3 class="build-h3">Build on it</h3>
+    <p class="lede">
+      The contract is deployed, public and unowned. There is no admin key, no
+      keeper and no backend &mdash; settlement is permissionless, so a policy
+      that expires can be adjudicated by anyone, including a cron job that is
+      not yours.
+    </p>
+
+    <figure class="code">
+      <figcaption>genlayer-py &mdash; write cover from a script</figcaption>
+      <pre><code><span class="k">from</span> genlayer_py <span class="k">import</span> create_client
+<span class="k">from</span> genlayer_py.chains <span class="k">import</span> studionet
+
+client = create_client(chain=studionet, account=account)
+client.write_contract(
+    address=<span class="s">"0xBF326FA29B839cF95d3c9d0895b7A852031C3822"</span>,
+    function_name=<span class="s">"buy_policy"</span>,
+    args=[trigger, criteria, sources, payout_wei, expires_ts],
+    value=premium_wei,
+)</code></pre>
+    </figure>
+
+    <p>
+      Sixteen methods, nine of them views. <code>fund_pool</code> and
+      <code>withdraw_pool</code> are the underwriter's side;
+      <code>quote</code> tells you before you pay whether the pool can back a
+      given payout; <code>buy_policy</code> reserves it; <code>settle_policy</code>
+      is the call anybody can make. Clone it, point the trigger at your own
+      measurement, and the adjudication above is already done for you.
+    </p>
+    <p class="fineprint">
+      Source, tests and the deployment notes are in the repository, including
+      the integration test that writes cover on StudioNet, waits for it to
+      expire, and asserts on what the validators actually decided.
+    </p>
+  </section>
+
+
+  <section class="cta">
+    <div class="wrap">
+      <h2>Insure something odd.</h2>
+      <p>
+        Connect any EVM wallet, take some test GEN, and buy cover against
+        rainfall, a heatwave, an earthquake count or a price floor &mdash; each
+        template builds its trigger from live data as you click it. StudioNet is
+        a test network; none of it costs real money.
+      </p>
+      <a class="btn-link primary" href="noclaim.html">Open the cover desk</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <p>
+    Intelligent Contract <code id="footer-address">&mdash;</code> running in
+    GenVM on GenLayer StudioNet, chain 61999.
+    <a id="explorer-link" href="#" target="_blank" rel="noopener">View on the explorer</a>
+  </p>
+  <p class="fineprint">
+    Settled by GenLayer's Optimistic Democracy: validators fetch the sources
+    independently, run the same prompt, and the transaction only lands if their
+    verdicts match. No oracle, no adjuster, no admin key. StudioNet is a test
+    network; the GEN on it is not worth anything.
+  </p>
+</footer>
+
+<script type="module" src="home.js"></script>
+</body>
+</html>

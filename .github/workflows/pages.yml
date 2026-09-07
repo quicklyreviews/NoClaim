@@ -1,0 +1,46 @@
+# Publish the app to GitHub Pages.
+#
+# frontend/ is a static site with no build step - the import map pulls
+# genlayer-js straight from a CDN and everything else talks to StudioNet from
+# the browser - so this only has to copy the directory and hand it to Pages.
+# Publishing the folder rather than moving it to the repo root keeps the
+# contract, the tests and the docs where they belong.
+
+name: Deploy frontend to Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and let a newer push win rather than queue behind an
+# older one that is about to be superseded anyway.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

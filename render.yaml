@@ -1,0 +1,45 @@
+# Render blueprint: point Render at this repository as a Blueprint and the
+# service below is created ready to go.
+#
+# A static site and nothing else. There is no server side at all: the page
+# talks to StudioNet directly, and settling an expired policy is a
+# permissionless action any visitor can take. There is no key to hold, so
+# there is nothing here that could hold one.
+
+services:
+  - type: web
+    name: noclaim
+    runtime: static
+    # frontend/ is served as-is: the import map pulls genlayer-js from a CDN,
+    # so there is nothing to compile.
+    buildCommand: "echo 'static site - nothing to build'"
+    staticPublishPath: ./frontend
+    pullRequestPreviewsEnabled: false
+
+    headers:
+      # The page holds no keys and reads no cookies, but it is still worth not
+      # being framable by anyone who fancies wrapping a wallet prompt in their
+      # own chrome.
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+
+      # The modules and the stylesheet change together and are small, so they
+      # are revalidated rather than cached hard. A stale noclaim.js against a
+      # fresh noclaim.html is the failure mode that cost the most time in
+      # development.
+      - path: /*.js
+        name: Cache-Control
+        value: "public, max-age=0, must-revalidate"
+      - path: /*.css
+        name: Cache-Control
+        value: "public, max-age=0, must-revalidate"
+      - path: /*.html
+        name: Cache-Control
+        value: "public, max-age=0, must-revalidate"
