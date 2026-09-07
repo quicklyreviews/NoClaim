@@ -57,6 +57,11 @@ function renderNetbar() {
   $('btn-connect').hidden = connected;
   setText($('wallet-address'), shorten(signer.address));
   $('wallet-address').title = signer.address || '';
+
+  // Three decimals, always. A wallet holding a hundred million GEN swallows a
+  // payout of one whole coin, and a page that only ever showed a wallet
+  // address gave nobody a way to notice that money had in fact arrived.
+  setText($('wallet-gen'), connected ? gen(walletGen) : '-');
 }
 
 // --- how to take part ------------------------------------------------
@@ -321,6 +326,7 @@ async function refreshAccount() {
   // collectable balance behind a hidden banner for an entire session.
   try {
     walletGen = BigInt(await rpc('eth_getBalance', [signer.address, 'latest']));
+    renderNetbar();
   } catch (e) { console.debug('wallet balance', e); }
   try {
     owed = BigInt(await contract.read('get_balance', [signer.address]));
@@ -369,6 +375,7 @@ async function awaitPayout(before, label) {
     } catch { continue; }
     if (now > before) {
       walletGen = now;
+      renderNetbar();
       renderSteps();
       toast(`${gen(now - before)} GEN has arrived in your wallet`, 'success');
       return true;

@@ -1466,3 +1466,14 @@ figure.code .s { color: var(--yes); }
 @media (max-width: 620px) {
   figure.code pre { font-size: 11.5px; padding: 13px; }
 }
+
+/* The wallet's own balance, beside its address. Tabular figures because the
+   point of it is watching one number change by a small amount. */
+.net-gen {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  opacity: .72;
+  font-variant-numeric: tabular-nums;
+}
+.net-gen code { font-size: inherit; }
+@media (max-width: 620px) { .net-gen { display: none; } }

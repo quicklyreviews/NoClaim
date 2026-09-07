@@ -39,6 +39,10 @@
       <button id="btn-switch-chain" class="warnbtn" hidden>Switch to StudioNet</button>
       <span class="net-account" id="net-account" hidden>
         <code id="wallet-address">-</code>
+        <!-- The wallet's own balance, because a payout of a few GEN into an
+             account holding millions is invisible in the wallet itself, and
+             that is exactly how "the money never arrived" gets reported. -->
+        <span class="net-gen"><code id="wallet-gen">-</code> GEN</span>
         <button id="btn-signout" class="link">disconnect</button>
       </span>
       <button id="btn-connect" class="primary small">Connect wallet</button>
