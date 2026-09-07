@@ -3,15 +3,32 @@
 **Track:** Prediction Markets & Real-World Settlement — Agent Tank hackathon
 (`https://portal.genlayer.foundation/agent-tank/hackathon`)
 
+**Demo:** <https://ntclick.github.io/noclaim/> — the landing page.
+The cover desk, where you buy, settle and collect, is at
+[`/noclaim.html`](https://ntclick.github.io/noclaim/noclaim.html).
+
 **Contract:** [`0xBF326FA29B839cF95d3c9d0895b7A852031C3822`](https://explorer-studio.genlayer.com/address/0xBF326FA29B839cF95d3c9d0895b7A852031C3822)
 on GenLayer StudioNet, chain 61999 — every policy ever written, and the
 reasoning the validators agreed on, is readable there without trusting this
-repository at all.
+repository, or the link above, at all.
 
-The site is `frontend/`, served as static files: `render.yaml` is a Render
-blueprint and `.github/workflows/pages.yml` publishes to GitHub Pages. No URL
-is hard-coded here, because a link in a README outlives the deployment it
-points at.
+## Try it in four steps
+
+1. **Connect a wallet** on the cover desk. StudioNet is added for you; the bar
+   at the top names the chain, the contract and your balance, and turns amber
+   if the wallet is anywhere else.
+2. **Take test GEN** from the checklist. It is a test network and the GEN is
+   free.
+3. **Buy cover.** Click the Rainfall template — it reads the live forecast and
+   sets the threshold just above it — set the window to 6 minutes, and buy.
+4. **Settle it** once the countdown ends. Or settle somebody else's: the
+   *Every policy* tab usually has expired ones waiting, and anyone may
+   adjudicate them. That is the point.
+
+If cover pays out, the amount is credited to you and **Collect** moves it to
+your wallet. Watch the balance in the top bar rather than your wallet's own
+screen: the transfer is a second transaction that lands about a minute later,
+and a few GEN arriving in an account holding millions is easy to miss.
 
 Parametric insurance, settled by validator consensus. Name the event you want
 cover against, say how it should be judged and where the evidence lives. At
