@@ -28,7 +28,7 @@ import { COVER_TEMPLATES } from './cover-templates.js';
 // Deployed and exercised by tests/integration/test_noclaim_studionet.py: cover
 // refused when unbacked, a policy settled from real price evidence, and an
 // unknowable trigger refunded in full.
-const CONTRACT = '0xBF326FA29B839cF95d3c9d0895b7A852031C3822';
+const CONTRACT = '0xB21Bb12256e9EaEfa5Af906F73Ff7766b6b1cce7';
 const BLOCKED_SOURCE_HOSTS = ['binance.com'];
 
 const contract = makeContract(CONTRACT);

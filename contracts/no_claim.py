@@ -1,4 +1,4 @@
-# v0.1.0 -- NoClaim: parametric cover that pays without a claim being filed
+# v0.2.0 -- NoClaim: parametric cover that pays without a claim being filed
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 
 # GenVM parses the two lines above as the "runner comment" and is strict about them:
@@ -13,6 +13,23 @@
 # Time comes from datetime.datetime.now(), never time.time(): expiries derived
 # from it are written to state, and state must match across validators exactly.
 # genvm-lint raises W002 on time.time() and accepts this form.
+#
+# v0.2.0 changes vs v0.1.0
+#   1. Evidence sources are validated against a public-host rule: localhost,
+#      loopback and RFC-1918 addresses are rejected at buy time so validators
+#      can always reach every source independently.
+#   2. UNKNOWN settlements are retryable: a policy that cannot be adjudicated
+#      stays ACTIVE and may be settled again after UNKNOWN_RETRY_DELAY seconds,
+#      up to MAX_UNKNOWN_RETRIES total UNKNOWN verdicts before it finalises as
+#      REFUNDED.  This lets a transient source outage resolve itself rather than
+#      permanently blocking the policy in an unadjudicated state.
+#   3. Policy storage is split into active_policies_json (only ACTIVE policies,
+#      the set that settle_policy reads and writes on every call) and
+#      archive_policies_json (SETTLED policies, append-only).  settle_policy
+#      therefore operates on a bounded-size document regardless of how many
+#      policies have been written over the lifetime of the contract, and
+#      get_policies_page / get_active_policies give callers efficient access
+#      without pulling the entire history.
 
 from genlayer import *
 
@@ -71,8 +88,79 @@ MAX_SOURCES = 3
 MAX_SOURCE_CHARS = 4000
 MAX_TRIGGER_CHARS = 300
 MAX_CRITERIA_CHARS = 600
-MIN_COVER_SECONDS = 300      # a policy has to be able to outlive its own creation
+MIN_COVER_SECONDS = 300       # a policy has to be able to outlive its own creation
 MAX_COVER_SECONDS = 31536000  # one year
+
+# --- Retryable UNKNOWN constants -----------------------------------------
+# When validators cannot reach a verdict, the policy stays ACTIVE and may be
+# settled again after UNKNOWN_RETRY_DELAY seconds.  After MAX_UNKNOWN_RETRIES
+# total UNKNOWN verdicts the policy is finalised as REFUNDED.
+MAX_UNKNOWN_RETRIES = 2      # total UNKNOWN verdicts allowed before finalising
+UNKNOWN_RETRY_DELAY = 3600   # seconds the caller must wait between retry attempts
+
+
+def _validate_source_url(url: str) -> None:
+    """Reject URLs that point at private, loopback, or internal hosts.
+
+    Every source must be publicly reachable so that independent validators can
+    fetch it themselves.  A policy backed by localhost or a private IP would
+    always adjudicate UNKNOWN (because validators cannot see it), and the
+    premium would be refunded every time -- which is not useful insurance.
+
+    Blocked:
+        - No dot in hostname (bare names like 'myserver')
+        - localhost
+        - Loopback: 127.x.x.x
+        - Private IPv4: 10.x, 172.16-31.x, 192.168.x, 169.254.x (link-local)
+    """
+    try:
+        scheme_end = url.index("://")
+        rest = url[scheme_end + 3:]
+        host_part = rest.split("/")[0].split("?")[0].split("#")[0]
+        if host_part.startswith("["):
+            # IPv6 literal: [::1]:port
+            bracket_end = host_part.index("]")
+            host = host_part[1:bracket_end]
+        elif ":" in host_part:
+            host = host_part[:host_part.rindex(":")]
+        else:
+            host = host_part
+        host = host.lower().strip()
+    except (ValueError, IndexError):
+        raise gl.vm.UserError(f"unparseable source URL: {url}")
+
+    if not host:
+        raise gl.vm.UserError(f"source URL has no host: {url}")
+
+    # Require at least one dot so bare hostnames are rejected
+    if "." not in host:
+        raise gl.vm.UserError(
+            f"source host must be a public domain (needs a dot), got: {host}"
+        )
+
+    if host == "localhost":
+        raise gl.vm.UserError("source URL must be publicly reachable, not localhost")
+
+    # Block private and loopback IPv4 ranges
+    octets = host.split(".")
+    if len(octets) == 4:
+        try:
+            a, b = int(octets[0]), int(octets[1])
+            blocked = (
+                a == 127                             # loopback
+                or a == 10                           # RFC-1918
+                or (a == 172 and 16 <= b <= 31)      # RFC-1918
+                or (a == 192 and b == 168)           # RFC-1918
+                or (a == 169 and b == 254)           # link-local
+            )
+            if blocked:
+                raise gl.vm.UserError(
+                    f"source URL must be publicly reachable, not a private/loopback IP: {host}"
+                )
+        except gl.vm.UserError:
+            raise
+        except ValueError:
+            pass  # not a numeric IP -- treat as hostname, fine
 
 
 class NoClaim(gl.Contract):
@@ -107,9 +195,21 @@ class NoClaim(gl.Contract):
     Here, UNKNOWN refunds the premium. If the evidence cannot establish whether
     the event happened, the underwriters do not get to keep money for carrying a
     risk nobody can adjudicate, and the buyer is not denied on a technicality.
-    Neither side wins the argument, so neither side pays for it. That is only
-    possible because the adjudicator is neutral, permissionless, and cannot be
-    leaned on by either party.
+    Neither side wins the argument, so neither side pays for it.
+
+    UNKNOWN IS RETRYABLE
+
+    A transient source outage should not permanently seal a policy in an
+    unadjudicated state. If the first verdict is UNKNOWN the policy stays ACTIVE
+    and may be settled again after UNKNOWN_RETRY_DELAY seconds. After
+    MAX_UNKNOWN_RETRIES total UNKNOWN verdicts the premium is refunded as usual.
+
+    EVIDENCE SOURCES ARE CONSTRAINED TO PUBLIC HOSTS
+
+    Validators run in independent network environments. A source that points at
+    localhost or a private IP is unreachable by design: every settlement would
+    return UNKNOWN and the premium would always be refunded. buy_policy rejects
+    such URLs at purchase time so the problem surfaces before money changes hands.
 
     SOLVENCY IS ENFORCED, NOT PROMISED
 
@@ -118,6 +218,16 @@ class NoClaim(gl.Contract):
     can only withdraw capital that is not reserved. The contract therefore
     cannot become insolvent through underwriting, only through a payout it has
     already set aside for.
+
+    STORAGE
+
+    Policies are stored in two separate blobs:
+        active_policies_json  -- only ACTIVE (unsettled) policies
+        archive_policies_json -- only SETTLED policies (append-only)
+
+    settle_policy therefore reads and writes a document that is bounded by the
+    number of concurrently live policies, not by the total ever written. The
+    archive is only read by view functions where large responses are acceptable.
     """
 
     owner: str
@@ -127,8 +237,9 @@ class NoClaim(gl.Contract):
     premiums_earned: u256     # premiums kept on policies that did not fire
     payouts_made: u256        # lifetime cover actually paid
     underwriters_json: str    # { "0xaddr": "wei" } -- who put in what
-    # --- policies ---
-    policies_json: str        # { "1": {policy...} }
+    # --- policies (split store) ---
+    active_policies_json: str   # { "id": {...} } -- ACTIVE policies only
+    archive_policies_json: str  # { "id": {...} } -- SETTLED policies (append-only)
     next_policy_id: u256
     # --- money owed to individuals ---
     balances_json: str        # { "0xaddr": "wei" } -- collectable, withdrawable
@@ -146,7 +257,8 @@ class NoClaim(gl.Contract):
         self.premiums_earned = u256(0)
         self.payouts_made = u256(0)
         self.underwriters_json = "{}"
-        self.policies_json = "{}"
+        self.active_policies_json = "{}"
+        self.archive_policies_json = "{}"
         self.next_policy_id = u256(1)
         self.balances_json = "{}"
         self.balances_total = u256(0)
@@ -166,12 +278,6 @@ class NoClaim(gl.Contract):
     def _require_owner(self) -> None:
         if str(gl.message.sender_address).lower() != self.owner:
             raise gl.vm.UserError("Only owner can call this")
-
-    def _policy(self, policies: dict, pid: str) -> dict:
-        p = policies.get(pid)
-        if not p:
-            raise gl.vm.UserError(f"Unknown policy: {pid}")
-        return p
 
     def _pool_free(self) -> int:
         """Capital not already promised to a live policy."""
@@ -358,6 +464,11 @@ class NoClaim(gl.Contract):
 
         The payout is reserved from the pool here and now. If the pool cannot
         cover it, the policy is refused rather than written and hoped for.
+
+        Source URLs must point at publicly reachable hosts. Localhost and
+        private-range IPs are rejected: validators run in independent network
+        environments and cannot reach internal hosts, so such a policy would
+        always adjudicate UNKNOWN and always refund the premium.
         """
         trigger = trigger.strip()
         criteria = criteria.strip()
@@ -399,10 +510,12 @@ class NoClaim(gl.Contract):
         for url in src:
             if not (url.startswith("http://") or url.startswith("https://")):
                 raise gl.vm.UserError(f"invalid source URL: {url}")
+            # Constrain to publicly reachable hosts only
+            _validate_source_url(url)
 
-        policies = self._load(self.policies_json, {})
+        active = self._load(self.active_policies_json, {})
         pid = str(int(self.next_policy_id))
-        policies[pid] = {
+        active[pid] = {
             "id": pid,
             "holder": str(gl.message.sender_address).lower(),
             "trigger": trigger,
@@ -416,8 +529,10 @@ class NoClaim(gl.Contract):
             "outcome": "",
             "reasoning": "",
             "collected": 0,
+            "unknown_count": 0,
+            "last_unknown_ts": 0,
         }
-        self.policies_json = json.dumps(policies)
+        self.active_policies_json = json.dumps(active)
         self.next_policy_id += u256(1)
 
         # The premium joins the pool, and the payout is set aside from it.
@@ -437,16 +552,42 @@ class NoClaim(gl.Contract):
     @gl.public.write
     def settle_policy(self, policy_id: u256) -> dict[str, typing.Any]:
         """Decide a policy at expiry. Callable by anyone -- there is no adjuster
-        to appoint and no claim to file."""
+        to appoint and no claim to file.
+
+        If validators cannot reach a verdict (UNKNOWN), the policy stays ACTIVE
+        and may be settled again after UNKNOWN_RETRY_DELAY seconds. After
+        MAX_UNKNOWN_RETRIES total UNKNOWN verdicts the premium is refunded and
+        the policy is archived.  This lets a transient source outage resolve
+        naturally rather than permanently locking up the premium.
+        """
         pid = str(int(policy_id))
-        policies = self._load(self.policies_json, {})
-        p = self._policy(policies, pid)
+        active = self._load(self.active_policies_json, {})
+        p = active.get(pid)
+        if not p:
+            # Give a more helpful error if the policy is already archived
+            archive = self._load(self.archive_policies_json, {})
+            if archive.get(pid):
+                raise gl.vm.UserError(f"Policy {pid} is already settled")
+            raise gl.vm.UserError(f"Unknown policy: {pid}")
 
         if p["status"] != "ACTIVE":
             raise gl.vm.UserError(f"Policy is {p['status']}, not active")
+
         now = _now()
         if now < int(p["expires_ts"]):
             raise gl.vm.UserError(f"Not due yet, {int(p['expires_ts']) - now}s remaining")
+
+        # Enforce the retry delay between successive UNKNOWN attempts
+        unknown_count = int(p.get("unknown_count", 0))
+        if unknown_count > 0:
+            last_unknown_ts = int(p.get("last_unknown_ts", 0))
+            retry_available = last_unknown_ts + UNKNOWN_RETRY_DELAY
+            if now < retry_available:
+                wait = retry_available - now
+                raise gl.vm.UserError(
+                    f"UNKNOWN retry not available for another {wait}s "
+                    f"(attempt {unknown_count} of {MAX_UNKNOWN_RETRIES})"
+                )
 
         sources = self._load(p.get("sources_json", "[]"), [])
         verdict = self._adjudicate(p["trigger"], p["criteria"], sources)
@@ -454,11 +595,31 @@ class NoClaim(gl.Contract):
 
         cover = int(p["payout"])
         premium = int(p["premium"])
-        balances = self._load(self.balances_json, {})
 
-        # The reserve is released in every case; what differs is who ends up
-        # with the money.
+        # --- Retryable UNKNOWN path ------------------------------------
+        # Keep the policy ACTIVE if we have not exhausted our retry budget.
+        # The reserve is NOT released -- the policy is still live.
+        if outcome == "UNKNOWN" and (unknown_count + 1) < MAX_UNKNOWN_RETRIES:
+            p["unknown_count"] = unknown_count + 1
+            p["last_unknown_ts"] = now
+            p["reasoning"] = str(verdict.get("reasoning", ""))[:500]
+            active[pid] = p
+            self.active_policies_json = json.dumps(active)
+            retries_left = MAX_UNKNOWN_RETRIES - (unknown_count + 1)
+            return {
+                "policy_id": pid,
+                "outcome": "UNKNOWN",
+                "settlement": "PENDING_RETRY",
+                "retries_remaining": retries_left,
+                "retry_after": now + UNKNOWN_RETRY_DELAY,
+                "reasoning": p["reasoning"],
+            }
+
+        # --- Final settlement -----------------------------------------
+        # Covers FIRED, NOT_FIRED, and UNKNOWN with exhausted retries.
+        # Release the reserve in all three cases.
         self.pool_reserved = u256(max(0, int(self.pool_reserved) - cover))
+        balances = self._load(self.balances_json, {})
 
         if outcome == "FIRED":
             # The pool pays. It keeps the premium, so its loss is the
@@ -473,11 +634,9 @@ class NoClaim(gl.Contract):
             self.premiums_earned += u256(premium)
             settlement = "EXPIRED"
         else:
-            # UNKNOWN. Nobody proved anything, so nobody is charged for it: the
-            # premium goes back and the pool keeps none of it. This is the
-            # opposite of how insurance normally resolves doubt, and it is the
-            # reason this contract can be trusted by the side that would
-            # otherwise have to prove its loss.
+            # UNKNOWN (retry budget exhausted). Nobody proved anything, so
+            # nobody is charged for it: the premium goes back and the pool
+            # keeps none of it.
             self._credit(balances, p["holder"], premium)
             self.pool_total = u256(max(0, int(self.pool_total) - premium))
             self.unclaimed_total += u256(premium)
@@ -488,8 +647,13 @@ class NoClaim(gl.Contract):
         p["outcome"] = outcome
         p["settlement"] = settlement
         p["reasoning"] = str(verdict.get("reasoning", ""))[:500]
-        policies[pid] = p
-        self.policies_json = json.dumps(policies)
+
+        # Move from active to archive
+        active.pop(pid, None)
+        archive = self._load(self.archive_policies_json, {})
+        archive[pid] = p
+        self.active_policies_json = json.dumps(active)
+        self.archive_policies_json = json.dumps(archive)
 
         return {
             "policy_id": pid,
@@ -536,17 +700,74 @@ class NoClaim(gl.Contract):
 
     @gl.public.view
     def get_policy(self, policy_id: u256) -> dict[str, typing.Any]:
-        return self._policy(self._load(self.policies_json, {}), str(int(policy_id)))
+        """Return one policy by ID, checking active store first then archive."""
+        pid = str(int(policy_id))
+        active = self._load(self.active_policies_json, {})
+        p = active.get(pid)
+        if p:
+            return p
+        archive = self._load(self.archive_policies_json, {})
+        p = archive.get(pid)
+        if p:
+            return p
+        raise gl.vm.UserError(f"Unknown policy: {pid}")
 
     @gl.public.view
     def get_all_policies(self) -> str:
-        return self.policies_json
+        """Return every policy ever written as a JSON object keyed by ID.
+
+        This merges the active store and the archive in one call. For large
+        deployments prefer get_policies_page() to avoid loading the full history.
+        """
+        active = self._load(self.active_policies_json, {})
+        archive = self._load(self.archive_policies_json, {})
+        merged = {**archive, **active}
+        return json.dumps(merged)
+
+    @gl.public.view
+    def get_active_policies(self) -> str:
+        """Return only the currently ACTIVE (unsettled) policies.
+
+        This is the bounded-size document that settle_policy operates on.
+        Use this when you only need to show live cover.
+        """
+        return self.active_policies_json
+
+    @gl.public.view
+    def get_policies_page(self, offset: u256, limit: u256) -> str:
+        """Return a page of policies, newest first.
+
+        Merge active and archive, sort by numeric ID descending, then slice.
+        This lets a frontend paginate the full history without loading the
+        entire archive in one call.
+        """
+        off = int(offset)
+        lim = max(1, min(int(limit), 100))  # cap at 100 per page
+        active = self._load(self.active_policies_json, {})
+        archive = self._load(self.archive_policies_json, {})
+        merged = {**archive, **active}
+        # Sort newest (highest numeric ID) first
+        items = sorted(merged.values(), key=lambda p: int(p["id"]), reverse=True)
+        return json.dumps(items[off: off + lim])
+
+    @gl.public.view
+    def get_policy_count(self) -> dict[str, typing.Any]:
+        """Return counts of active and archived policies."""
+        active = self._load(self.active_policies_json, {})
+        archive = self._load(self.archive_policies_json, {})
+        return {
+            "active": len(active),
+            "archived": len(archive),
+            "total": len(active) + len(archive),
+        }
 
     @gl.public.view
     def get_policies_of(self, addr: str) -> str:
         addr = addr.lower()
-        policies = self._load(self.policies_json, {})
-        return json.dumps([p for p in policies.values() if p.get("holder") == addr])
+        active = self._load(self.active_policies_json, {})
+        archive = self._load(self.archive_policies_json, {})
+        merged = {**archive, **active}
+        return json.dumps([p for p in merged.values() if p.get("holder") == addr])
 
     @gl.public.view
     def get_balance(self, addr: str) -> str:
@@ -587,13 +808,14 @@ class NoClaim(gl.Contract):
 
     @gl.public.view
     def get_stats(self) -> dict[str, typing.Any]:
-        policies = self._load(self.policies_json, {})
-        active = sum(1 for p in policies.values() if p.get("status") == "ACTIVE")
-        fired = sum(1 for p in policies.values() if p.get("settlement") == "PAID")
-        refunded = sum(1 for p in policies.values() if p.get("settlement") == "REFUNDED")
+        active = self._load(self.active_policies_json, {})
+        archive = self._load(self.archive_policies_json, {})
+        all_policies = {**archive, **active}
+        fired = sum(1 for p in all_policies.values() if p.get("settlement") == "PAID")
+        refunded = sum(1 for p in all_policies.values() if p.get("settlement") == "REFUNDED")
         return {
-            "policies_written": len(policies),
-            "active": active,
+            "policies_written": len(all_policies),
+            "active": len(active),
             "paid_out": fired,
             "refunded_unknown": refunded,
             "pool_total": str(self.pool_total),

@@ -7,7 +7,7 @@
 The cover desk, where you buy, settle and collect, is at
 [`/noclaim.html`](https://ntclick.github.io/noclaim/noclaim.html).
 
-**Contract:** [`0xBF326FA29B839cF95d3c9d0895b7A852031C3822`](https://explorer-studio.genlayer.com/address/0xBF326FA29B839cF95d3c9d0895b7A852031C3822)
+**Contract:** [`0xB21Bb12256e9EaEfa5Af906F73Ff7766b6b1cce7`](https://explorer-studio.genlayer.com/address/0xB21Bb12256e9EaEfa5Af906F73Ff7766b6b1cce7)
 on GenLayer StudioNet, chain 61999 — every policy ever written, and the
 reasoning the validators agreed on, is readable there without trusting this
 repository, or the link above, at all.
@@ -116,7 +116,7 @@ frontend/cover-templates.js                  parametric cover built from live da
 frontend/wallet.js                           wallet, network check, and the request queue
 frontend/brand.js                            the mark, as SVG geometry shared by header and favicon
 tests/direct/conftest.py                     mock `genlayer` module, no GenVM needed
-tests/direct/test_no_claim.py                fast unit tests (12)
+tests/direct/test_no_claim.py                fast unit tests (24)
 tests/integration/test_noclaim_studionet.py  cover written, settled and refunded on a real network
 tests/integration/probe_sources.py           which URLs can validators actually reach
 ```
@@ -193,13 +193,45 @@ adjudication* until somebody clicks **Settle now**. That is correct rather than
 broken — the contract deliberately gives no one special authority over
 settlement — but a deployment nobody visits will accumulate unsettled policies.
 
+## v0.2.0 changes
+
+Three issues raised in review, now addressed in the contract:
+
+**1. Evidence sources constrained to public hosts.**
+`buy_policy` rejects localhost, loopback (`127.x`), and RFC-1918 addresses
+(`10.x`, `172.16-31.x`, `192.168.x`, `169.254.x`) at purchase time. Validators
+run in independent network environments; a policy backed by a private host
+would always return UNKNOWN and refund -- which is not useful insurance. The
+error surfaces before money changes hands rather than silently at settlement.
+
+**2. Retryable UNKNOWN outcomes.**
+A transient source outage no longer permanently locks a premium in an
+unadjudicated state. After a first UNKNOWN verdict the policy stays ACTIVE
+and may be re-settled after `UNKNOWN_RETRY_DELAY` seconds (default 1 hour).
+After `MAX_UNKNOWN_RETRIES` total UNKNOWN verdicts (default 2) the premium is
+refunded as before. The pool reserve is held throughout the retry window.
+
+**3. Split active/archive storage + pagination.**
+Policies are now stored in two separate blobs:
+
+- `active_policies_json` -- only ACTIVE (unsettled) policies. This is the
+  document `settle_policy` reads and writes; it stays bounded regardless of
+  how many policies have ever been written.
+- `archive_policies_json` -- SETTLED policies (append-only), only read by
+  views.
+
+New views: `get_active_policies()`, `get_policies_page(offset, limit)`,
+`get_policy_count()`. `get_all_policies()` and `get_policy()` continue to
+work as before by merging both stores.
+
 ## Known gaps
 
-- **State grows without bound.** Policies are never pruned, so the JSON blob
-  the contract stores gets monotonically larger. Fine for a hackathon,
-  not fine forever.
 - **No anti-spam bond on writing cover.** The premium floor stops free cover
   but not a flood of tiny policies.
 - **The pool is one bucket.** Every underwriter shares every risk pro rata;
   there is no tranching and no per-trigger exposure limit, so one badly
   correlated set of policies can drain it.
+- **Archive still grows without bound.** `archive_policies_json` accumulates
+  all settled policies. The hot path (`settle_policy`) only touches
+  `active_policies_json`, so performance does not degrade, but the archive
+  itself has no pruning mechanism.
