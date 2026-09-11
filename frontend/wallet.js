@@ -16,7 +16,7 @@ import { studionet } from 'genlayer-js/chains';
 import { TransactionStatus } from 'genlayer-js/types';
 
 export const RPC = 'https://studio.genlayer.com/api';
-export const EXPLORER = 'https://genlayer-explorer.vercel.app';
+export const EXPLORER = 'https://explorer-studio.genlayer.com';
 export const CHAIN_ID_HEX = '0xf22f'; // 61999
 export const ONE_GEN = 10n ** 18n;
 
